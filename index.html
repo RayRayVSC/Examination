@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>8字水平圓飛行動畫</title>
+    <style>
+        :root {
+            --sky: #87CEEB; --panel: rgba(0, 0, 0, 0.65); --panel-orange: rgba(20, 10, 0, 0.85);
+            --neon: #39FF14; --orange: #FF8C00; --gold: #FFD700; --cyan: #00BFFF; --text: #fff; --muted: #aaa;
+            --font: 'Segoe UI', 'Noto Sans TC', 'Microsoft JhengHei', Tahoma, sans-serif;
+            --mono: 'Courier New', Courier, monospace;
+        }
+        html, body { margin: 0; height: 100%; overflow: hidden; background: var(--sky); color: var(--text); font-family: var(--font); }
+        canvas#scene { display: block; }
+
+        /* 左上角：飛行狀態 HUD */
+        #left-col { position: absolute; top: 15px; left: 15px; width: 280px; display: flex; flex-direction: column; gap: 12px; pointer-events: none; }
+        #hud-left {
+            width: 250px;
+            font-size: 15px; text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+            pointer-events: none; background: var(--panel); padding: 12px 15px; border-radius: 8px;
+        }
+        #hud-left h2, #steps h2 { font-size: 17px; margin: 0 0 8px 0; color: var(--cyan); border-bottom: 1px solid #555; padding-bottom: 5px; }
+        .data-row { margin-bottom: 4px; display: flex; justify-content: space-between; gap: 8px; }
+        .data-val { color: var(--gold); font-weight: bold; font-variant-numeric: tabular-nums; }
+        .sep { margin: 8px 0; border-top: 1px dashed #555; }
+
+        /* 左側：測驗準則步驟 */
+        #steps {
+            width: 250px; background: var(--panel);
+            padding: 12px 15px; border-radius: 8px; font-size: 14px; pointer-events: none; text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+        }
+        #steps ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+        #steps li { display: grid; grid-template-columns: 22px 1fr; gap: 6px; color: var(--muted); line-height: 1.4; }
+        #steps li .n { color: #777; font-weight: bold; font-variant-numeric: tabular-nums; }
+        #steps li.done { color: #ccc; } #steps li.done .n { color: var(--neon); }
+        #steps li.active { color: #fff; } #steps li.active .n { color: var(--gold); }
+        #steps li.active .txt { font-weight: bold; }
+        #steps .note { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #555; color: #ddd; font-size: 12px; line-height: 1.5; }
+        #steps .note b { color: var(--orange); }
+
+        /* 右上角：遙測 (螢光橙色框) */
+        #telemetry-container {
+            position: absolute; top: 15px; right: 15px; background: var(--panel-orange);
+            padding: 12px 15px; border-radius: 8px; border-left: 4px solid var(--orange);
+            pointer-events: none; width: 250px; box-shadow: 0 0 10px rgba(255, 140, 0, 0.2);
+        }
+        #telemetry-container h2 { font-size: 16px; margin: 0 0 8px 0; color: var(--orange); border-bottom: 1px solid #663300; padding-bottom: 5px; }
+        #waypoints { display: flex; flex-wrap: wrap; gap: 4px; }
+        #waypoints span {
+            font-family: var(--mono); font-size: 12px; font-weight: bold; padding: 2px 6px; border-radius: 4px;
+            border: 1px solid #663300; color: #8a5a20; background: rgba(0,0,0,0.3);
+        }
+        #waypoints span.passed { color: #000; background: var(--orange); border-color: var(--orange); }
+        #waypoints span.next { color: var(--gold); border-color: var(--gold); }
+        #waypoints .arrow { border: none; background: none; color: #8a5a20; padding: 2px 0; }
+
+        /* 頂部中央：目前動作 */
+        #caption {
+            position: absolute; top: 15px; left: 50%; transform: translateX(-50%); text-align: center; pointer-events: none;
+            background: var(--panel); padding: 8px 22px; border-radius: 8px; min-width: 300px; max-width: 46vw;
+        }
+        #caption .phase { font-size: 12px; letter-spacing: 2px; color: var(--cyan); text-transform: uppercase; }
+        #caption .action { font-size: 20px; font-weight: bold; color: var(--gold); text-shadow: 1px 1px 3px rgba(0,0,0,0.8); text-wrap: balance; }
+        #caption .detail { font-size: 13px; color: #ddd; margin-top: 2px; }
+
+        /* 畫面中央：倒數 / 口誦 */
+        #callout {
+            position: absolute; top: 42%; left: 50%; transform: translate(-50%, -50%); pointer-events: none;
+            font-size: 96px; font-weight: 900; color: #fff; text-shadow: 0 0 18px rgba(0,0,0,0.6), 0 0 40px rgba(57,255,20,0.5);
+            opacity: 0; transition: opacity 0.2s;
+        }
+        #callout.show { opacity: 1; animation: pop 0.35s ease-out; }
+        @keyframes pop { from { transform: translate(-50%, -50%) scale(1.5); } to { transform: translate(-50%, -50%) scale(1); } }
+        @media (prefers-reduced-motion: reduce) { #callout.show { animation: none; } }
+
+        /* 底部中央：播放控制列 */
+        #controls {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: min(860px, 64vw);
+            background: var(--panel); border-radius: 8px; padding: 10px 14px; display: flex; flex-direction: column; gap: 8px;
+        }
+        #controls .row { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+        #controls button, #controls select {
+            font-family: var(--font); font-size: 14px; color: #fff; background: #222; border: 1px solid #555; border-radius: 5px;
+            padding: 5px 10px; cursor: pointer;
+        }
+        #controls button:hover, #controls select:hover { border-color: var(--gold); }
+        #controls button:focus-visible, #controls select:focus-visible, #scrub:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+        #controls button.primary { background: #145214; border-color: var(--neon); color: var(--neon); font-weight: bold; min-width: 76px; }
+        #scrub { flex: 1; accent-color: var(--neon); cursor: pointer; }
+        #timecode { font-family: var(--mono); font-size: 14px; color: var(--gold); font-variant-numeric: tabular-nums; min-width: 96px; text-align: right; }
+        #controls label { font-size: 13px; color: #ddd; display: flex; align-items: center; gap: 4px; }
+        #controls .spacer { flex: 1; }
+        #cam-name { font-size: 13px; color: var(--neon); }
+        #toast {
+            position: absolute; bottom: 110px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); color: var(--neon);
+            font-family: var(--mono); font-size: 13px; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--neon); pointer-events: none;
+            opacity: 0; transition: opacity 0.3s; white-space: pre; max-width: 90vw; overflow: hidden; text-overflow: ellipsis;
+        }
+        #toast.show { opacity: 1; }
+
+        /* 底部左側：操作提示 */
+        #controls-hint {
+            color: white; background: rgba(0, 0, 0, 0.7); box-sizing: border-box; width: 100%;
+            padding: 10px 12px; border-radius: 5px; font-size: 12px; line-height: 1.7; pointer-events: none;
+        }
+        @media (max-height: 640px) { #controls-hint { display: none; } }
+
+        /* 右下角：俯視雷達 (螢光橙色框) */
+        #right-bottom { position: absolute; bottom: 20px; right: 15px; width: 244px; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+        #radar-container {
+            background: var(--panel-orange); border: 2px solid var(--orange); box-sizing: border-box;
+            border-radius: 8px; pointer-events: none; padding: 10px; box-shadow: 0 0 15px rgba(255, 140, 0, 0.3);
+        }
+        #radar-container h2 { font-size: 14px; margin: 0 0 8px 0; color: var(--orange); text-align: center; letter-spacing: 1px; }
+        #radar-canvas { background: rgba(30, 15, 0, 0.5); border-radius: 4px; border: 1px solid #663300; display: block; }
+
+        #labels-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; }
+        .marker-label {
+            position: absolute; color: #FF0000; font-weight: bold; font-family: Arial, sans-serif; font-size: 16px;
+            text-shadow: 1px 1px 0 #FFF, -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF; transform: translate(-50%, -50%);
+        }
+        .marker-label.h { color: #1a5fb4; font-size: 18px; }
+
+        @media (max-height: 700px) { #steps { display: none; } }
+        @media (max-width: 1000px) { #controls-hint, #telemetry-container { display: none; } #controls { width: 80vw; } #caption { max-width: 40vw; } }
+    </style>
+</head>
+<body>
+    <canvas id="scene"></canvas>
+
+    <div id="left-col">
+    <div id="hud-left">
+        <h2>✈️ 飛行狀態</h2>
+        <div class="data-row"><span>機體高度</span><span><span id="altitude" class="data-val">0.00</span> m</span></div>
+        <div class="data-row"><span>X 軸座標</span><span><span id="pos-x" class="data-val">0.00</span> m</span></div>
+        <div class="data-row"><span>Z 軸座標</span><span><span id="pos-z" class="data-val">0.00</span> m</span></div>
+        <div class="data-row"><span>機頭航向</span><span><span id="heading" class="data-val">0</span>°</span></div>
+        <div class="data-row"><span>地速</span><span><span id="speed" class="data-val">0.00</span> m/s</span></div>
+        <div class="sep"></div>
+        <div class="data-row"><span>視角模式</span><span id="camera-mode" class="data-val" style="color:#00FF00;">環繞視角</span></div>
+        <div class="data-row"><span>距 H 點</span><span><span id="dist-h" class="data-val">0.00</span> m</span></div>
+        <div class="data-row"><span>飛行路徑總長</span><span><span id="path-len" class="data-val">0.0</span> m</span></div>
+    </div>
+
+    <div id="steps">
+        <h2>📋 C. 8字水平圓 測驗準則</h2>
+        <ol>
+            <li data-step="0"><span class="n">1</span><span class="txt">接獲監評人員指示後，口誦「3、2、1、Go」</span></li>
+            <li data-step="1"><span class="n">2</span><span class="txt">機頭朝外，自起降點 H 起飛至高度約 1~2 公尺，定點懸停 5 秒以上</span></li>
+            <li data-step="2"><span class="n">3</span><span class="txt">機頭朝飛行方向，向左前方以逆時針繞行 P4、P1、P2、P3、P4 角錐圓弧，水平盤旋一圈</span></li>
+            <li data-step="3"><span class="n">4</span><span class="txt">再向右前方以順時針繞行 P4、P5、P6、P7、P4 角錐圓弧，水平盤旋一圈</span></li>
+            <li data-step="4"><span class="n">5</span><span class="txt">後退返航起降點 H，機頭朝外並維持等高懸停，口誦「結束」</span></li>
+        </ol>
+        <div class="note">
+            <b>※</b> 協調轉彎動作必需持續進行，不得有明顯停頓轉向，整機不得超出 8 字航線標示範圍（內圓 4 m / 外圓 8 m）。<br>
+            <b>※</b> 開始與返航機頭方向須朝外。
+        </div>
+    </div>
+    </div>
+
+    <div id="telemetry-container">
+        <h2>📍 航點進度</h2>
+        <div id="waypoints"></div>
+    </div>
+
+    <div id="caption">
+        <div class="phase" id="cap-phase">待命</div>
+        <div class="action" id="cap-action">應考人接獲監評人員指示</div>
+        <div class="detail" id="cap-detail">執行『8 字水平圓』</div>
+    </div>
+
+    <div id="callout"></div>
+    <div id="toast"></div>
+
+    <div id="controls">
+        <div class="row">
+            <button id="btn-play" class="primary" title="播放 / 暫停 (空白鍵)">▶ 播放</button>
+            <button id="btn-restart" title="重新開始 (R)">⟲ 重來</button>
+            <input type="range" id="scrub" min="0" max="1000" value="0" step="1" aria-label="時間軸">
+            <span id="timecode">0.0 / 0.0 s</span>
+        </div>
+        <div class="row">
+            <label>速度
+                <select id="speed-sel">
+                    <option value="0.5">0.5x</option>
+                    <option value="1" selected>1x</option>
+                    <option value="2">2x</option>
+                    <option value="4">4x</option>
+                </select>
+            </label>
+            <button id="btn-cam" title="切換視角 (C)">📷 切換視角</button>
+            <span id="cam-name">環繞視角（滑鼠拖曳旋轉、滾輪縮放）</span>
+            <span class="spacer"></span>
+            <button id="btn-save-view" title="把目前環繞視角存成預設，並複製座標到剪貼簿">📌 儲存自訂視角</button>
+            <button id="btn-reset-view" title="清除儲存的視角，回到程式預設">↺ 預設視角</button>
+            <label><input type="checkbox" id="loop-chk" checked> 循環播放</label>
+            <label><input type="checkbox" id="guide-chk" checked> 顯示航線</label>
+        </div>
+    </div>
+
+
+    <div id="right-bottom">
+    <div id="radar-container">
+        <h2>🛰️ 全域俯視雷達</h2>
+        <canvas id="radar-canvas" width="220" height="180"></canvas>
+    </div>
+    <div id="controls-hint">
+        ⌨️ <strong>[ 空白鍵 ]</strong> 播放/暫停 | <strong>[ R ]</strong> 重來<br>
+        ⌨️ <strong>[ C ]</strong> 切換視角 | <strong>[ ← ] / [ → ]</strong> 前後 2 秒<br>
+        ⌨️ <strong>[ ↑ ] / [ ↓ ]</strong> 站位視角高度 | <strong>[ I ] / [ O ]</strong> 焦距縮放<br>
+        🖱️ 環繞視角：拖曳旋轉、滾輪縮放、右鍵平移<br>
+        📌 調好角度後按「儲存自訂視角」即成為下次開啟的預設
+    </div>
+    </div>
+
+    <div id="labels-container"></div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ==========================================
+        // 場景、攝影機與渲染器（沿用模擬器設定）
+        // ==========================================
+        const canvasEl = document.getElementById('scene');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        scene.fog = new THREE.Fog(0x87CEEB, 60, 140);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 500);
+        const renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 20, 10);
+        dirLight.castShadow = true;
+        dirLight.shadow.camera.top = 20; dirLight.shadow.camera.bottom = -20;
+        dirLight.shadow.camera.left = -20; dirLight.shadow.camera.right = 20;
+        dirLight.shadow.mapSize.set(2048, 2048);
+        scene.add(dirLight);
+
+        // ==========================================
+        // 考場幾何（與模擬器一致：內圓 4 m、外圓 8 m、角錐圓 6 m）
+        // ==========================================
+        const centerZ = -6;
+        const centerLeftX = -6, centerRightX = 6, R = 6, innerR = 4, outerR = 8;
+        const neonGreen = 0x39FF14;
+        let operatorHeight = 2.0;
+        const operatorPos = new THREE.Vector3(0, operatorHeight, 7);
+
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(150, 150), new THREE.MeshStandardMaterial({ color: 0x444444, side: THREE.DoubleSide }));
+        ground.rotation.x = Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+        const airspaceCenterZ = -8, airspaceWidth = 80, airspaceDepth = 20;
+        const airspace = new THREE.Mesh(new THREE.PlaneGeometry(airspaceWidth, airspaceDepth), new THREE.MeshBasicMaterial({ color: 0xADD8E6, transparent: true, opacity: 0.3, side: THREE.DoubleSide }));
+        airspace.rotation.x = -Math.PI / 2; airspace.position.set(0, 0.005, airspaceCenterZ); scene.add(airspace);
+
+        function createRectLine(width, depth, cx, cz, color) {
+            const hw = width / 2, hd = depth / 2;
+            const pts = [
+                new THREE.Vector3(cx - hw, 0.015, cz - hd), new THREE.Vector3(cx + hw, 0.015, cz - hd),
+                new THREE.Vector3(cx + hw, 0.015, cz + hd), new THREE.Vector3(cx - hw, 0.015, cz + hd),
+                new THREE.Vector3(cx - hw, 0.015, cz - hd)
+            ];
+            scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color })));
+        }
+        createRectLine(airspaceWidth, airspaceDepth, 0, airspaceCenterZ, 0xFFFF00);
+
+        const testArea = new THREE.Mesh(new THREE.PlaneGeometry(26, 14), new THREE.MeshStandardMaterial({ color: 0x666666, side: THREE.DoubleSide }));
+        testArea.rotation.x = -Math.PI / 2; testArea.position.set(0, 0.01, centerZ); testArea.receiveShadow = true; scene.add(testArea);
+
+        function createCircleLine(x, z, radius, color, isDashed = false) {
+            const pts = [];
+            for (let i = 0; i <= 96; i++) pts.push(new THREE.Vector3(x + Math.cos((i / 96) * Math.PI * 2) * radius, 0.02, z + Math.sin((i / 96) * Math.PI * 2) * radius));
+            const mat = isDashed ? new THREE.LineDashedMaterial({ color, dashSize: 0.5, gapSize: 0.2 }) : new THREE.LineBasicMaterial({ color });
+            const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat);
+            if (isDashed) line.computeLineDistances();
+            scene.add(line);
+        }
+        createCircleLine(centerLeftX, centerZ, outerR, neonGreen); createCircleLine(centerLeftX, centerZ, innerR, neonGreen); createCircleLine(centerLeftX, centerZ, R, 0x00BFFF, true);
+        createCircleLine(centerRightX, centerZ, outerR, neonGreen); createCircleLine(centerRightX, centerZ, innerR, neonGreen); createCircleLine(centerRightX, centerZ, R, 0x00BFFF, true);
+        createCircleLine(0, 0, 1.0, neonGreen);
+
+        // 8 字航線標示範圍（內外圓之間）淡淡填色，便於辨識「不得超出」的區域
+        const bandMat = new THREE.MeshBasicMaterial({ color: 0x39FF14, transparent: true, opacity: 0.07, side: THREE.DoubleSide, depthWrite: false });
+        [centerLeftX, centerRightX].forEach(cx => {
+            const ring = new THREE.Mesh(new THREE.RingGeometry(innerR, outerR, 96), bandMat);
+            ring.rotation.x = -Math.PI / 2; ring.position.set(cx, 0.018, centerZ); scene.add(ring);
+        });
+
+        // --- 角錐與投影標籤 ---
+        const labels = []; const labelsContainer = document.getElementById('labels-container'); const coneHeight = 1.0;
+        const coneMat = new THREE.MeshStandardMaterial({ color: 0xFF6600, roughness: 0.6, metalness: 0.1 });
+        const cones = {};
+        function createCone(x, z, labelText) {
+            const cone = new THREE.Mesh(new THREE.ConeGeometry(0.2, coneHeight, 16), coneMat.clone());
+            cone.position.set(x, coneHeight / 2, z); cone.castShadow = true; scene.add(cone);
+            cones[labelText] = cone;
+            const div = document.createElement('div'); div.className = 'marker-label'; div.innerText = labelText;
+            labelsContainer.appendChild(div); labels.push({ element: div, pos: new THREE.Vector3(x, coneHeight + 0.3, z) });
+        }
+        const P = {
+            P1: [centerLeftX, centerZ - R], P2: [centerLeftX - R, centerZ], P3: [centerLeftX, centerZ + R], P4: [0, centerZ],
+            P5: [centerRightX, centerZ - R], P6: [centerRightX + R, centerZ], P7: [centerRightX, centerZ + R]
+        };
+        Object.entries(P).forEach(([name, [x, z]]) => createCone(x, z, name));
+        { const div = document.createElement('div'); div.className = 'marker-label h'; div.innerText = 'H'; labelsContainer.appendChild(div); labels.push({ element: div, pos: new THREE.Vector3(0, 0.6, 0.9) }); }
+
+        // --- H 停機坪 ---
+        const hPadGroup = new THREE.Group(); hPadGroup.position.set(0, 0.015, 0);
+        const pad = new THREE.Mesh(new THREE.CircleGeometry(1.0, 32), new THREE.MeshStandardMaterial({ color: 0xDDDDDD }));
+        pad.rotation.x = -Math.PI / 2; pad.receiveShadow = true; hPadGroup.add(pad);
+        const hMat = new THREE.MeshStandardMaterial({ color: 0x333333, emissive: 0x000000 });
+        [[0.2, 1.0, -0.4, 0], [0.2, 1.0, 0.4, 0], [0.8, 0.2, 0, 0]].forEach(([w, h, x, z]) => {
+            const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), hMat); m.rotation.x = -Math.PI / 2; m.position.set(x, 0.01, z); hPadGroup.add(m);
+        });
+        scene.add(hPadGroup);
+
+        // --- 應考人（站位）---
+        const operatorGroup = new THREE.Group();
+        const vestMat = new THREE.MeshStandardMaterial({ color: 0xFF6600 });
+        const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.8, 12), new THREE.MeshStandardMaterial({ color: 0x223366 })); legs.position.y = 0.4;
+        const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.18, 0.6, 12), vestMat); torso.position.y = 1.1;
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 12), new THREE.MeshStandardMaterial({ color: 0xF1C27D })); head.position.y = 1.55;
+        const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xFFD700 })); helmet.position.y = 1.56;
+        const tx = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.05, 0.18), new THREE.MeshStandardMaterial({ color: 0x111111 })); tx.position.set(0, 1.05, -0.25);
+        [legs, torso, head, helmet, tx].forEach(m => { m.castShadow = true; operatorGroup.add(m); });
+        operatorGroup.position.set(0, 0, 7); scene.add(operatorGroup);
+
+        // ==========================================
+        // 無人機模型（沿用模擬器）
+        // ==========================================
+        const droneGroup = new THREE.Group(); const droneHeight = 0.5; const droneYOffset = droneHeight / 2;
+        const droneTiltGroup = new THREE.Group(); droneGroup.add(droneTiltGroup);
+        const propellers = [];
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0x444444 });
+        const centerBody = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.25), bodyMat); centerBody.castShadow = true; droneTiltGroup.add(centerBody);
+        const frontCam = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 0.05), new THREE.MeshStandardMaterial({ color: 0xFF0000 }));
+        frontCam.position.set(0, 0, -0.15); frontCam.castShadow = true; droneTiltGroup.add(frontCam);
+        const armGeo = new THREE.BoxGeometry(0.04, 0.04, 1.0); const armMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+        const arm1 = new THREE.Mesh(armGeo, armMat); arm1.rotation.y = Math.PI / 4; arm1.castShadow = true; droneTiltGroup.add(arm1);
+        const arm2 = new THREE.Mesh(armGeo, armMat); arm2.rotation.y = -Math.PI / 4; arm2.castShadow = true; droneTiltGroup.add(arm2);
+        const motorGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.06, 16); const motorMat = new THREE.MeshStandardMaterial({ color: 0x666666 });
+        const propGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.01, 16);
+        const propMatFront = new THREE.MeshBasicMaterial({ color: 0xFF4444, transparent: true, opacity: 0.6 });
+        const propMatRear = new THREE.MeshBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.6 });
+        const mo = 0.5 * Math.cos(Math.PI / 4);
+        [{ x: -mo, z: -mo, f: true }, { x: mo, z: -mo, f: true }, { x: -mo, z: mo, f: false }, { x: mo, z: mo, f: false }].forEach(p => {
+            const motor = new THREE.Mesh(motorGeo, motorMat); motor.position.set(p.x, 0.03, p.z); motor.castShadow = true; droneTiltGroup.add(motor);
+            const prop = new THREE.Mesh(propGeo, p.f ? propMatFront : propMatRear); prop.position.set(p.x, 0.06, p.z); droneTiltGroup.add(prop); propellers.push(prop);
+        });
+        const skidGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.4, 8); const skidMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+        [-0.15, 0.15].forEach(x => { const s = new THREE.Mesh(skidGeo, skidMat); s.rotation.x = Math.PI / 2; s.position.set(x, -0.23, 0); s.castShadow = true; droneTiltGroup.add(s); });
+        const legGeo = new THREE.CylinderGeometry(0.01, 0.01, 0.23, 8);
+        [[-0.15, -0.1], [-0.15, 0.1], [0.15, -0.1], [0.15, 0.1]].forEach(([x, z]) => { const l = new THREE.Mesh(legGeo, skidMat); l.position.set(x, -0.115, z); l.castShadow = true; droneTiltGroup.add(l); });
+        // 機頭方向指示（紅色小箭頭），讓「機頭朝飛行方向」一目瞭然
+        const noseArrow = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.2, 8), new THREE.MeshBasicMaterial({ color: 0xFF2222 }));
+        noseArrow.rotation.x = -Math.PI / 2; noseArrow.position.set(0, 0.02, -0.55); droneTiltGroup.add(noseArrow);
+        droneGroup.position.set(0, droneYOffset, 0); scene.add(droneGroup);
+
+        // 圓形地面陰影 + 高度參考線
+        const shadowGroup = new THREE.Group();
+        const shadowCircle = new THREE.Mesh(new THREE.CircleGeometry(0.25, 32), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5 }));
+        shadowCircle.rotation.x = -Math.PI / 2; shadowGroup.add(shadowCircle); shadowGroup.position.y = 0.025; scene.add(shadowGroup);
+        const altLineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1, 0)]);
+        const altLine = new THREE.Line(altLineGeo, new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 0.15, gapSize: 0.1, transparent: true, opacity: 0.5 }));
+        scene.add(altLine);
+
+        // ==========================================
+        // ★ 8 字水平圓 飛行時間軸 ★
+        // ==========================================
+        const ALT = 1.5;                       // 規範：高度約 1~2 公尺
+        const T_COUNT = 4, T_TAKEOFF = 3, T_HOVER1 = 5, T_RETURN = 4.5, T_HOVER2 = 4;
+        const VC = 2.0;                        // 巡航等速 m/s
+        const ACC_D = 3.0;                     // 加/減速距離 m
+        const A = VC * VC / (2 * ACC_D), T_ACC = VC / A;
+        const L_STRAIGHT = 6, L_CIRCLE = 2 * Math.PI * R, L_FWD = L_STRAIGHT + 2 * L_CIRCLE;
+        const T_CRUISE = (L_FWD - 2 * ACC_D) / VC;
+        const T_FIG8 = 2 * T_ACC + T_CRUISE;
+        const t1 = T_COUNT, t2 = t1 + T_TAKEOFF, t3 = t2 + T_HOVER1, t4 = t3 + T_FIG8, t5 = t4 + T_RETURN, t6 = t5 + T_HOVER2;
+        const TOTAL = t6;
+        const S_TOTAL = ALT + L_FWD + L_STRAIGHT; // 理想航線總長（含起飛與返航）
+
+        const smooth = k => { k = Math.max(0, Math.min(1, k)); return k * k * (3 - 2 * k); };
+
+        // 沿航線之距離（梯形速度曲線：起步加速、等速盤旋、回到 P4 減速停止）
+        function distAt(tau) {
+            if (tau <= 0) return 0;
+            if (tau < T_ACC) return 0.5 * A * tau * tau;
+            if (tau < T_ACC + T_CRUISE) return ACC_D + VC * (tau - T_ACC);
+            if (tau < T_FIG8) { const r = T_FIG8 - tau; return L_FWD - 0.5 * A * r * r; }
+            return L_FWD;
+        }
+        // 航線幾何：H→P4 直線；左圓逆時針 P4→P1→P2→P3→P4；右圓順時針 P4→P5→P6→P7→P4
+        function pathPoint(s) {
+            if (s <= L_STRAIGHT) return { x: 0, z: -s, hx: 0, hz: -1, seg: 0, th: 0 };
+            s -= L_STRAIGHT;
+            if (s <= L_CIRCLE) { const th = -s / R; return { x: centerLeftX + R * Math.cos(th), z: centerZ + R * Math.sin(th), hx: Math.sin(th), hz: -Math.cos(th), seg: 1, th }; }
+            s = Math.min(s - L_CIRCLE, L_CIRCLE);
+            const th = Math.PI + s / R; return { x: centerRightX + R * Math.cos(th), z: centerZ + R * Math.sin(th), hx: -Math.sin(th), hz: Math.cos(th), seg: 2, th };
+        }
+        function stateAt(t) {
+            const st = { x: 0, y: 0, z: 0, hx: 0, hz: -1, phase: 0, seg: -1, th: 0, d: 0, s: 0 };
+            if (t < t1) { st.phase = 0; }
+            else if (t < t2) { st.phase = 1; const k = smooth((t - t1) / T_TAKEOFF); st.y = ALT * k; st.s = ALT * k; }
+            else if (t < t3) { st.phase = 2; st.y = ALT; st.s = ALT; }
+            else if (t < t4) { st.phase = 3; st.y = ALT; st.d = distAt(t - t3); const p = pathPoint(st.d); Object.assign(st, { x: p.x, z: p.z, hx: p.hx, hz: p.hz, seg: p.seg, th: p.th }); st.s = ALT + st.d; }
+            else if (t < t5) { st.phase = 4; st.y = ALT; st.d = L_FWD; const k = smooth((t - t4) / T_RETURN); st.z = -L_STRAIGHT * (1 - k); st.s = ALT + L_FWD + L_STRAIGHT * k; }
+            else { st.phase = 5; st.y = ALT; st.d = L_FWD; st.s = S_TOTAL; }
+            st.yaw = Math.atan2(-st.hx, -st.hz);
+            return st;
+        }
+        function idealPos(s) {
+            if (s <= ALT) return new THREE.Vector3(0, s + droneYOffset, 0);
+            if (s <= ALT + L_FWD) { const p = pathPoint(s - ALT); return new THREE.Vector3(p.x, ALT + droneYOffset, p.z); }
+            return new THREE.Vector3(0, ALT + droneYOffset, -L_STRAIGHT + (s - ALT - L_FWD));
+        }
+
+        // 理想航線（黃色，如規範圖 9）與實際軌跡（螢光綠，隨時間延伸）
+        class PathCurve extends THREE.Curve { getPoint(t, target = new THREE.Vector3()) { return target.copy(idealPos(t * S_TOTAL)); } }
+        const TUBE_SEGS = 1200, TUBE_RAD = 6;
+        const curve = new PathCurve();
+        const guideTube = new THREE.Mesh(new THREE.TubeGeometry(curve, TUBE_SEGS, 0.035, TUBE_RAD, false), new THREE.MeshBasicMaterial({ color: 0xFFD700, transparent: true, opacity: 0.35, depthWrite: false }));
+        scene.add(guideTube);
+        const trailTube = new THREE.Mesh(new THREE.TubeGeometry(curve, TUBE_SEGS, 0.05, TUBE_RAD, false), new THREE.MeshBasicMaterial({ color: neonGreen }));
+        trailTube.geometry.setDrawRange(0, 0); scene.add(trailTube);
+        // 航線方向箭頭（左圓逆時針、右圓順時針）
+        const arrowMat = new THREE.MeshBasicMaterial({ color: 0xFFD700, transparent: true, opacity: 0.8 });
+        [L_STRAIGHT + L_CIRCLE * 0.125, L_STRAIGHT + L_CIRCLE * 0.375, L_STRAIGHT + L_CIRCLE * 0.625, L_STRAIGHT + L_CIRCLE * 0.875,
+         L_STRAIGHT + L_CIRCLE * 1.125, L_STRAIGHT + L_CIRCLE * 1.375, L_STRAIGHT + L_CIRCLE * 1.625, L_STRAIGHT + L_CIRCLE * 1.875, 3].forEach(s => {
+            const p = pathPoint(s);
+            const ar = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.4, 8), arrowMat);
+            ar.position.set(p.x, ALT + droneYOffset, p.z);
+            ar.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(p.hx, 0, p.hz).normalize());
+            guideTube.add(ar);
+        });
+
+        // 航點通過判定（依航線距離，可拖曳時間軸重算）
+        const WAYPOINTS = [
+            { n: 'P4', d: L_STRAIGHT }, { n: 'P1', d: L_STRAIGHT + L_CIRCLE * 0.25 }, { n: 'P2', d: L_STRAIGHT + L_CIRCLE * 0.5 }, { n: 'P3', d: L_STRAIGHT + L_CIRCLE * 0.75 }, { n: 'P4', d: L_STRAIGHT + L_CIRCLE },
+            { n: 'P5', d: L_STRAIGHT + L_CIRCLE * 1.25 }, { n: 'P6', d: L_STRAIGHT + L_CIRCLE * 1.5 }, { n: 'P7', d: L_STRAIGHT + L_CIRCLE * 1.75 }, { n: 'P4', d: L_STRAIGHT + L_CIRCLE * 2 }, { n: 'H', d: Infinity }
+        ];
+        const wpContainer = document.getElementById('waypoints');
+        const wpEls = WAYPOINTS.map((w, i) => {
+            if (i > 0) { const a = document.createElement('span'); a.className = 'arrow'; a.textContent = '›'; wpContainer.appendChild(a); }
+            const el = document.createElement('span'); el.textContent = w.n; wpContainer.appendChild(el); return el;
+        });
+
+        // ==========================================
+        // UI 元件與播放狀態
+        // ==========================================
+        const ui = {
+            altitude: document.getElementById('altitude'), posX: document.getElementById('pos-x'), posZ: document.getElementById('pos-z'),
+            heading: document.getElementById('heading'), speed: document.getElementById('speed'), distH: document.getElementById('dist-h'),
+            pathLen: document.getElementById('path-len'), camMode: document.getElementById('camera-mode'), camName: document.getElementById('cam-name'),
+            capPhase: document.getElementById('cap-phase'), capAction: document.getElementById('cap-action'),
+            capDetail: document.getElementById('cap-detail'), callout: document.getElementById('callout'), play: document.getElementById('btn-play'),
+            scrub: document.getElementById('scrub'), timecode: document.getElementById('timecode'), speedSel: document.getElementById('speed-sel'),
+            loop: document.getElementById('loop-chk'), guide: document.getElementById('guide-chk'), steps: Array.from(document.querySelectorAll('#steps li'))
+        };
+        ui.pathLen.innerText = (L_FWD + L_STRAIGHT).toFixed(1);
+
+        let simTime = 0, playing = false, playRate = 1, scrubbing = false;
+        const clock = new THREE.Clock();
+
+        function setPlaying(p) { playing = p; ui.play.innerText = p ? '⏸ 暫停' : '▶ 播放'; }
+        function restart() { simTime = 0; lastCallout = ''; setPlaying(true); }
+        ui.play.addEventListener('click', () => { if (!playing && simTime >= TOTAL) simTime = 0; setPlaying(!playing); });
+        document.getElementById('btn-restart').addEventListener('click', restart);
+        ui.speedSel.addEventListener('change', () => { playRate = parseFloat(ui.speedSel.value); });
+        ui.guide.addEventListener('change', () => { guideTube.visible = ui.guide.checked; });
+        ui.scrub.addEventListener('input', () => { simTime = (ui.scrub.value / 1000) * TOTAL; scrubbing = true; });
+        ui.scrub.addEventListener('change', () => { scrubbing = false; });
+
+        // ==========================================
+        // 視角系統
+        // ==========================================
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; controls.dampingFactor = 0.08; controls.maxPolarAngle = Math.PI / 2 - 0.02; controls.minDistance = 3; controls.maxDistance = 90;
+        // 初始環繞視角：中線正後方 14.69 m、高 7.55 m（使用者調校），視線朝場地中心（ORBIT_TILT_UP_DEG 可調整抬升角度）
+        const ORBIT_POS = new THREE.Vector3(0, 7.55, 14.69), ORBIT_AIM = new THREE.Vector3(0, 0, -5), ORBIT_TILT_UP_DEG = 0;
+        const VIEW_KEY = 'figure8.orbitView';
+        function loadSavedView() {
+            try { const v = JSON.parse(localStorage.getItem(VIEW_KEY)); if (v && v.pos && v.target) return v; } catch (e) {}
+            return null;
+        }
+        function resetOrbitView() {
+            const saved = loadSavedView();
+            if (saved) { camera.position.fromArray(saved.pos); controls.target.fromArray(saved.target); return; }
+            camera.position.copy(ORBIT_POS);
+            const dir = ORBIT_AIM.clone().sub(ORBIT_POS);
+            const dist = dir.length();
+            dir.normalize().applyAxisAngle(new THREE.Vector3(1, 0, 0), THREE.MathUtils.degToRad(ORBIT_TILT_UP_DEG));
+            controls.target.copy(ORBIT_POS).addScaledVector(dir, dist);
+        }
+        resetOrbitView();
+        const CAM_MODES = [
+            { name: '環繞視角', hint: '環繞視角（滑鼠拖曳旋轉、滾輪縮放）' },
+            { name: '站位視角 (追蹤)', hint: '站位視角：由應考人位置追蹤機體（↑↓ 調高度、I/O 縮放）' },
+            { name: '俯視視角', hint: '俯視視角：正上方觀看 8 字航線' },
+            { name: '第三人稱跟隨', hint: '第三人稱跟隨：機尾後方固定距離跟隨' },
+            { name: '第一人稱 (FPV)', hint: '第一人稱：模擬機頭鏡頭畫面' }
+        ];
+        let cameraMode = 0;
+        function setCameraMode(m) {
+            cameraMode = m % CAM_MODES.length;
+            ui.camMode.innerText = CAM_MODES[cameraMode].name; ui.camName.innerText = CAM_MODES[cameraMode].hint;
+            controls.enabled = (cameraMode === 0);
+            camera.up.set(0, 1, 0);
+            camera.zoom = cameraMode === 1 ? 1.5 : 1.0; camera.updateProjectionMatrix();
+            if (cameraMode === 0) resetOrbitView();
+        }
+        document.getElementById('btn-cam').addEventListener('click', () => setCameraMode(cameraMode + 1));
+        setCameraMode(0);
+
+        // 儲存 / 還原使用者手動調整的環繞視角
+        const toastEl = document.getElementById('toast'); let toastTimer = null;
+        function showToast(msg) { toastEl.textContent = msg; toastEl.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('show'), 4000); }
+        const f2 = v => v.toArray().map(n => parseFloat(n.toFixed(2)));
+        document.getElementById('btn-save-view').addEventListener('click', () => {
+            if (cameraMode !== 0) { showToast('請先切到「環繞視角」再儲存'); return; }
+            const v = { pos: f2(camera.position), target: f2(controls.target) };
+            const txt = `camera.position.set(${v.pos.join(', ')}); controls.target.set(${v.target.join(', ')});`;
+            try { localStorage.setItem(VIEW_KEY, JSON.stringify(v)); } catch (e) {}
+            if (navigator.clipboard) navigator.clipboard.writeText(txt).catch(() => {});
+            showToast('已儲存為預設視角並複製：\n' + txt);
+        });
+        document.getElementById('btn-reset-view').addEventListener('click', () => {
+            try { localStorage.removeItem(VIEW_KEY); } catch (e) {}
+            if (cameraMode !== 0) setCameraMode(0); else resetOrbitView();
+            showToast('已回到程式預設視角');
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') e.target.blur();
+            if (e.code === 'Space') { e.preventDefault(); ui.play.click(); }
+            if (e.key === 'r' || e.key === 'R') restart();
+            if (e.key === 'c' || e.key === 'C') setCameraMode(cameraMode + 1);
+            if (e.key === 'ArrowLeft') simTime = Math.max(0, simTime - 2);
+            if (e.key === 'ArrowRight') simTime = Math.min(TOTAL, simTime + 2);
+            if (e.key === 'ArrowUp') { operatorHeight = Math.min(10, operatorHeight + 0.2); operatorPos.y = operatorHeight; }
+            if (e.key === 'ArrowDown') { operatorHeight = Math.max(0.2, operatorHeight - 0.2); operatorPos.y = operatorHeight; }
+            if (e.key === 'i' || e.key === 'I') { camera.zoom = Math.min(3.0, camera.zoom + 0.1); camera.updateProjectionMatrix(); }
+            if (e.key === 'o' || e.key === 'O') { camera.zoom = Math.max(0.3, camera.zoom - 0.1); camera.updateProjectionMatrix(); }
+        });
+
+        // ==========================================
+        // 2D 雷達（沿用模擬器映射）
+        // ==========================================
+        const radarCanvas = document.getElementById('radar-canvas'); const rc = radarCanvas.getContext('2d');
+        const rW = radarCanvas.width, rH = radarCanvas.height, radarScale = rW / 45;
+        const mapX = x => (rW / 2) + x * radarScale; const mapZ = z => (rH / 2) + (z - centerZ) * radarScale;
+        function updateRadar(st, yaw) {
+            rc.clearRect(0, 0, rW, rH);
+            rc.strokeStyle = 'rgba(173, 216, 230, 0.6)'; rc.lineWidth = 1; rc.strokeRect(mapX(-40), mapZ(-18), 80 * radarScale, 20 * radarScale);
+            [[outerR, 'rgba(57,255,20,0.8)'], [innerR, 'rgba(57,255,20,0.8)'], [R, 'rgba(0,191,255,0.8)']].forEach(([rad, col]) => {
+                rc.beginPath(); rc.arc(mapX(centerLeftX), mapZ(centerZ), rad * radarScale, 0, Math.PI * 2); rc.strokeStyle = col; rc.stroke();
+                rc.beginPath(); rc.arc(mapX(centerRightX), mapZ(centerZ), rad * radarScale, 0, Math.PI * 2); rc.stroke();
+            });
+            rc.fillStyle = 'rgba(200,200,200,0.8)'; rc.beginPath(); rc.arc(mapX(0), mapZ(0), 1.0 * radarScale, 0, Math.PI * 2); rc.fill();
+            rc.fillStyle = '#FF6600'; Object.values(P).forEach(([x, z]) => { rc.beginPath(); rc.arc(mapX(x), mapZ(z), 2.2, 0, Math.PI * 2); rc.fill(); });
+            // 實際軌跡
+            if (st.s > ALT) {
+                rc.beginPath(); rc.strokeStyle = '#39FF14'; rc.lineWidth = 2;
+                const n = 160; for (let i = 0; i <= n; i++) { const p = idealPos(ALT + (st.s - ALT) * i / n); i ? rc.lineTo(mapX(p.x), mapZ(p.z)) : rc.moveTo(mapX(p.x), mapZ(p.z)); }
+                rc.stroke();
+            }
+            rc.save(); rc.translate(mapX(st.x), mapZ(st.z)); rc.rotate(-yaw);
+            rc.fillStyle = '#00FF00'; rc.beginPath(); rc.moveTo(0, -8); rc.lineTo(6, 6); rc.lineTo(0, 3); rc.lineTo(-6, 6); rc.closePath(); rc.fill();
+            rc.restore();
+        }
+
+        // ==========================================
+        // 字幕與 HUD
+        // ==========================================
+        let lastCallout = '';
+        function showCallout(txt) {
+            if (txt === lastCallout) return;
+            lastCallout = txt;
+            ui.callout.classList.remove('show');
+            if (!txt) { ui.callout.textContent = ''; return; }
+            void ui.callout.offsetWidth; // 重新觸發動畫
+            ui.callout.textContent = txt; ui.callout.classList.add('show');
+        }
+        const PHASE_NAMES = ['步驟 1 · 口誦倒數', '步驟 2 · 起飛', '步驟 2 · 定點懸停', '步驟 3 · 左圓 逆時針', '步驟 4 · 右圓 順時針', '步驟 5 · 後退返航', '步驟 5 · 等高懸停'];
+        function nextWaypoint(st) {
+            if (st.seg === 0) return 'P4';
+            const list = st.seg === 1 ? ['P1', 'P2', 'P3', 'P4'] : ['P5', 'P6', 'P7', 'P4'];
+            const prog = Math.abs(st.th - (st.seg === 1 ? 0 : Math.PI)) / (Math.PI / 2);
+            return list[Math.min(3, Math.floor(prog + 1e-6))];
+        }
+        function updateCaption(t, st) {
+            let phaseName = PHASE_NAMES[st.phase], action = '', detail = '', callout = '';
+            if (st.phase === 0) {
+                const n = Math.min(3, Math.floor(t)); callout = ['3', '2', '1', 'Go'][n];
+                action = '口誦「3、2、1、Go」'; detail = '接獲監評人員指示，機頭朝外，準備起飛';
+            } else if (st.phase === 1) { action = '機頭朝外起飛'; detail = `自起降點 H 垂直上升至 ${ALT.toFixed(1)} m（規範 1~2 m）`; }
+            else if (st.phase === 2) { const c = Math.min(5, Math.floor(t - t2) + 1); action = `定點懸停 讀秒 ${c} / 5`; detail = '穩定高度，定點懸停 5 秒（含）以上'; callout = String(c); }
+            else if (st.phase === 3) {
+                if (st.seg === 0) { action = '前進至 P4'; detail = '機頭朝外，沿中線向前飛至 P4 角錐上方'; }
+                else if (st.seg === 1) { phaseName = PHASE_NAMES[3]; action = `逆時針繞行 → 下一角錐 ${nextWaypoint(st)}`; detail = '左圓 P4 → P1 → P2 → P3 → P4，機頭朝飛行方向，等高等速'; }
+                else { phaseName = PHASE_NAMES[4]; action = `順時針繞行 → 下一角錐 ${nextWaypoint(st)}`; detail = '右圓 P4 → P5 → P6 → P7 → P4，機頭朝飛行方向，等高等速'; }
+            } else if (st.phase === 4) { action = '後退返航起降點 H'; detail = '機頭保持朝外，不轉向，倒退飛回 H 點上方'; }
+            else { action = '等高懸停，口誦「結束」'; detail = '維持等高定點懸停，靜候監評人員指示'; callout = '結束'; }
+            ui.capPhase.innerText = phaseName; ui.capAction.innerText = action; ui.capDetail.innerText = detail;
+            showCallout(callout);
+            const stepIdx = [0, 1, 1, st.seg === 2 ? 3 : 2, 4, 4][st.phase];
+            ui.steps.forEach((li, i) => { li.classList.toggle('done', i < stepIdx); li.classList.toggle('active', i === stepIdx); });
+        }
+
+        // ==========================================
+        // 主渲染迴圈
+        // ==========================================
+        const tmpV = new THREE.Vector3(), tmpF = new THREE.Vector3(), tmpR = new THREE.Vector3();
+        const tilt = { pitch: 0, roll: 0 };
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = Math.min(clock.getDelta(), 0.1);
+            if (playing && !scrubbing) {
+                simTime += dt * playRate;
+                if (simTime >= TOTAL) { if (ui.loop.checked) { simTime = 0; lastCallout = ''; } else { simTime = TOTAL; setPlaying(false); } }
+            }
+            const t = simTime;
+            const st = stateAt(t);
+            const stA = stateAt(t + 0.05), stB = stateAt(Math.max(0, t - 0.05));
+            const vx = (stA.x - stB.x) / 0.1, vz = (stA.z - stB.z) / 0.1, vy = (stA.y - stB.y) / 0.1;
+            const ax = (stA.x - 2 * st.x + stB.x) / (0.05 * 0.05), az = (stA.z - 2 * st.z + stB.z) / (0.05 * 0.05);
+
+            // 懸停微幅飄移（僅顯示用，軌跡採理想航線）
+            const air = st.y > 0.05 ? 1 : 0;
+            const nx = air * (0.03 * Math.sin(1.3 * t) + 0.02 * Math.sin(2.7 * t + 1)), nz = air * 0.03 * Math.cos(1.1 * t + 2), ny = air * 0.02 * Math.sin(1.7 * t);
+            droneGroup.position.set(st.x + nx, st.y + ny + droneYOffset, st.z + nz);
+            droneGroup.rotation.y = st.yaw;
+
+            // 姿態：依機體座標的速度與加速度傾斜（前進機頭下俯、轉彎向內側滾轉）
+            const fwdX = -Math.sin(st.yaw), fwdZ = -Math.cos(st.yaw), rgtX = Math.cos(st.yaw), rgtZ = -Math.sin(st.yaw);
+            const vF = vx * fwdX + vz * fwdZ, vR = vx * rgtX + vz * rgtZ, aF = ax * fwdX + az * fwdZ, aR = ax * rgtX + az * rgtZ;
+            const targetPitch = THREE.MathUtils.clamp(0.06 * vF + 0.12 * aF, -0.4, 0.4);
+            const targetRoll = THREE.MathUtils.clamp(0.06 * vR + 0.12 * aR, -0.4, 0.4);
+            tilt.pitch = THREE.MathUtils.lerp(tilt.pitch, targetPitch, 0.15); tilt.roll = THREE.MathUtils.lerp(tilt.roll, targetRoll, 0.15);
+            droneTiltGroup.rotation.x = -tilt.pitch; droneTiltGroup.rotation.z = -tilt.roll;
+
+            shadowGroup.position.set(droneGroup.position.x, 0.025, droneGroup.position.z);
+            altLine.position.set(droneGroup.position.x, 0.03, droneGroup.position.z); altLine.scale.y = Math.max(0.001, droneGroup.position.y - droneYOffset); altLine.computeLineDistances();
+
+            // 螺旋槳
+            const spin = st.phase === 0 ? Math.min(1, t / T_COUNT) * 0.3 : 0.5 + Math.abs(vy) * 0.5;
+            propellers.forEach(p => p.rotation.y -= spin);
+
+            // 實際軌跡延伸
+            const frac = Math.max(0, Math.min(1, st.s / S_TOTAL));
+            trailTube.geometry.setDrawRange(0, Math.floor(frac * TUBE_SEGS) * TUBE_RAD * 6);
+
+            // H 點範圍偵測（點亮螢光綠）
+            const distToHPad = Math.hypot(droneGroup.position.x, droneGroup.position.z);
+            if (distToHPad <= 1.0) { hMat.color.setHex(0x39FF14); hMat.emissive.setHex(0x39FF14); hMat.emissiveIntensity = 0.6; }
+            else { hMat.color.setHex(0x333333); hMat.emissive.setHex(0x000000); hMat.emissiveIntensity = 0; }
+            // 角錐接近點亮
+            Object.entries(P).forEach(([n, [x, z]]) => {
+                const near = st.y > 0.5 && Math.hypot(droneGroup.position.x - x, droneGroup.position.z - z) < 1.2;
+                cones[n].material.emissive.setHex(near ? 0xFF6600 : 0x000000); cones[n].material.emissiveIntensity = near ? 0.9 : 0;
+            });
+            // 航點進度
+            let nextMarked = false;
+            wpEls.forEach((el, i) => {
+                const w = WAYPOINTS[i];
+                const passed = w.n === 'H' ? st.phase >= 5 : (st.phase >= 4 || (st.phase === 3 && st.d >= w.d - 0.3));
+                el.classList.toggle('passed', passed);
+                const isNext = !passed && !nextMarked && st.phase >= 3; if (isNext) nextMarked = true;
+                el.classList.toggle('next', isNext);
+            });
+
+            // HUD
+            const gs = Math.hypot(vx, vz);
+            ui.altitude.innerText = (droneGroup.position.y - droneYOffset).toFixed(2);
+            ui.posX.innerText = droneGroup.position.x.toFixed(2); ui.posZ.innerText = droneGroup.position.z.toFixed(2);
+            ui.heading.innerText = String(Math.round(((-THREE.MathUtils.radToDeg(st.yaw)) % 360 + 360) % 360));
+            ui.speed.innerText = gs.toFixed(2); ui.distH.innerText = distToHPad.toFixed(2);
+            updateCaption(t, st);
+            if (!scrubbing) ui.scrub.value = Math.round((t / TOTAL) * 1000);
+            ui.timecode.innerText = `${t.toFixed(1)} / ${TOTAL.toFixed(1)} s`;
+            updateRadar(st, st.yaw);
+
+            // 運鏡
+            if (cameraMode === 0) { controls.update(); }
+            else if (cameraMode === 1) { camera.position.copy(operatorPos); camera.lookAt(droneGroup.position); }
+            else if (cameraMode === 2) { camera.up.set(0, 0, -1); camera.position.set(0, 36, centerZ); camera.lookAt(0, 0, centerZ); }
+            else if (cameraMode === 3) {
+                tmpV.set(0, 3, 5).applyMatrix4(droneGroup.matrixWorld); camera.position.lerp(tmpV, 0.1); camera.lookAt(droneGroup.position);
+            } else {
+                droneTiltGroup.updateMatrixWorld();
+                tmpV.set(0, 0.05, -0.15).applyMatrix4(droneTiltGroup.matrixWorld); camera.position.copy(tmpV);
+                tmpF.set(0, 0, -10).applyMatrix4(droneTiltGroup.matrixWorld); camera.lookAt(tmpF);
+            }
+
+            labels.forEach(label => {
+                tmpR.copy(label.pos).project(camera);
+                const distToCam = camera.position.distanceTo(label.pos);
+                if (tmpR.z < 1 && distToCam > 1.0) {
+                    const x = (tmpR.x * .5 + .5) * window.innerWidth, y = (tmpR.y * -.5 + .5) * window.innerHeight;
+                    label.element.style.transform = `translate(-50%, -50%) translate(${x}px,${y}px)`; label.element.style.display = 'block';
+                } else label.element.style.display = 'none';
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        setPlaying(true);
+        animate();
+    </script>
+</body>
+</html>
