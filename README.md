@@ -2,7 +2,10 @@
 
 民航局 AC-107 遙控無人機操作證術科測驗「無人多旋翼機 基本級」項目 **C. 8字水平圓** 的 Three.js 3D 飛行示範。
 
-線上觀看：https://rayrayvsc.github.io/drone-figure8-animation/
+線上觀看：
+
+- 8字水平圓 3D 動畫：https://rayrayvsc.github.io/drone-figure8-animation/figure8.html
+- 操作證資格矩陣投影片：https://rayrayvsc.github.io/drone-figure8-animation/slide-fixed.html （右下「下一頁」連到 3D 動畫）
 
 ## 飛行流程（依 AC-107 測驗準則 p.163）
 

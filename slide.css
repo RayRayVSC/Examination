@@ -1,0 +1,66 @@
+/* 投影片母片：1280×720 舞台、頁首帶、標題框、內容框、頁尾帶。與 styles.css 搭配；矩陣表格等元件另見 matrix.css */
+html,body{height:100%;overflow:hidden}
+body{min-height:0}
+.stage{position:relative;width:1280px;height:720px;z-index:2}
+/* 依 PPT 母片：標題框 x112 y67 w1056 h144；內容框 x112 y221–680 w1056（h459）；頁尾帶 y682–720（h38）貼底 */
+.slide-head,.slide-content,.slide-foot{position:absolute;left:112px;width:1056px}
+body.slide-fixed .stage{margin:0 auto}
+body.slide-fit .stage{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);transform-origin:center center}
+
+/* 標題區：與主頁相同結構，尺寸縮小以配合 720px 高度 */
+.slide-head{top:67px;height:144px;display:flex;flex-direction:column;justify-content:center}
+/* 頁首：位於標題框上方（y 20–58），與頁尾帶對稱 */
+.slide-top{position:absolute;left:112px;top:20px;width:1056px;height:38px;display:flex;align-items:flex-end;padding-bottom:6px;border-bottom:1px solid rgba(201,184,167,.16)}
+.slide-top .eyebrow{color:var(--faint);font:700 .83rem var(--font-zh);letter-spacing:.2em}
+.slide-top .eyebrow::before{content:"";display:inline-block;width:30px;height:1px;margin:0 10px 4px 0;background:var(--orange)}
+.slide-top .eyebrow b{color:var(--orange)}
+/* 標題三模組：第一行 標題－副標題，第二行 標題內文 */
+.slide-head h1.title-line{display:flex;align-items:baseline;gap:14px;margin:0 0 8px;line-height:1.15;white-space:nowrap}
+.title-main{font:700 48pt/1.15 var(--font-zh);letter-spacing:-.02em;color:var(--cream)}
+.title-sep{font:700 36pt/1.15 var(--font-zh);color:var(--cream)}
+.title-sub{font:700 36pt/1.15 var(--font-zh);letter-spacing:-.02em;color:var(--cream)}
+.slide-head .title-lead{margin:0;color:var(--muted);font-size:1.05rem;line-height:1.6}
+
+/* 內容框：y 221–680（h459），靠上。垂直堆疊，可放文字段落與元件（如 matrix.css 的矩陣表格）；
+   元件高度由元件自己決定（matrix.css 的表格為固定列高，不填滿內容框）。 */
+.slide-content{top:221px;height:459px;display:flex;flex-direction:column;gap:9pt}
+/* 內容框內文（母片內文規格）：18 pt、行距 100%、段前 9 pt（由 gap 提供）、項目符號「◦」 */
+.slide-content>p,.slide-content>ul,.slide-content>ol{margin:0;color:var(--cream);font-size:18pt;line-height:1}
+.slide-content>ul{list-style:"◦ ";padding-left:1.1em}
+
+/* 註腳 */
+.slide-foot{display:flex;justify-content:space-between;gap:16px;margin:0;color:var(--faint);font-size:10pt;line-height:1.3}
+/* 鎖定：頁尾帶貼齊投影片底邊（y 682–720），靠下對齊、底部內縮 6px；主題檔不得覆寫 */
+.stage .slide-foot{position:absolute!important;left:112px!important;width:1056px!important;top:auto!important;bottom:0!important;height:38px!important;box-sizing:border-box!important;padding-top:0!important;padding-bottom:6px!important;align-items:flex-end!important}
+/* 署名文字：以投影片中線置中，脫離 flex 流，不受左右翻頁按鈕寬度影響；文字框高度與按鈕相同（--nav-h）、與按鈕同底，文字靠上 */
+.slide-foot{--nav-h:32px}
+.slide-foot p{position:absolute;left:0;right:0;bottom:6px;height:var(--nav-h);display:flex;align-items:flex-start;gap:10px;margin:0;justify-content:center;text-align:center;white-space:nowrap}
+.slide-foot p span{color:var(--orange)}
+
+/* 上一頁／下一頁按鈕：遙控器（上一頁）與向右飛行的穿越機（下一頁），文字在圖示上方 */
+.nav-btn{display:inline-flex;flex-direction:column;align-items:center;gap:5px;flex:none;height:auto;padding:0;color:var(--orange);background:none;border:0;text-decoration:none;transition:filter .2s}
+.nav-text{color:var(--cream);font:700 .95rem var(--font-zh);letter-spacing:.06em;white-space:nowrap;line-height:1}
+.nav-icon{height:52px;width:auto;display:block;overflow:visible;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.nav-icon .fill{fill:currentColor;stroke:none}
+/* 穿越機：常態緩慢飄浮，滑鼠移入加速向右衝 */
+.icon-fpv .frame{fill:rgba(255,107,44,.16)}
+.icon-fpv .prop{fill:rgba(255,107,44,.28);stroke-width:1.5}
+.icon-fpv .trail{opacity:.45;transition:opacity .2s,transform .25s}
+.icon-fpv .quad{animation:fpv-hover 2.6s ease-in-out infinite}
+.nav-next:hover .icon-fpv .quad,.nav-next:focus-visible .icon-fpv .quad{animation:fpv-fly .7s ease-in-out infinite}
+.nav-next:hover .trail{opacity:1;transform:translateX(-5px)}
+@keyframes fpv-hover{0%,100%{transform:translate(0,0)}50%{transform:translate(1px,-2px)}}
+@keyframes fpv-fly{0%,100%{transform:translate(5px,0) rotate(0deg)}50%{transform:translate(8px,-2px) rotate(-4deg)}}
+/* 遙控器：滑鼠移入時搖桿擺動、天線訊號閃爍 */
+.icon-rc .stick{transform-box:fill-box;transform-origin:center}
+.icon-rc .signal{opacity:0;stroke-width:1.5}
+.nav-prev:hover .icon-rc .stick-l,.nav-prev:focus-visible .icon-rc .stick-l{animation:stick-l .8s ease-in-out infinite}
+.nav-prev:hover .icon-rc .stick-r,.nav-prev:focus-visible .icon-rc .stick-r{animation:stick-r .8s ease-in-out infinite .2s}
+.nav-prev:hover .icon-rc .signal,.nav-prev:focus-visible .icon-rc .signal{animation:signal .7s ease-out infinite}
+.nav-prev:hover .icon-rc .signal-2,.nav-prev:focus-visible .icon-rc .signal-2{animation-delay:.35s}
+@keyframes stick-l{0%,100%{transform:translate(0,0)}25%{transform:translate(-2.2px,-1px)}50%{transform:translate(0,2.2px)}75%{transform:translate(2px,-1.5px)}}
+@keyframes stick-r{0%,100%{transform:translate(0,0)}25%{transform:translate(2px,-2px)}50%{transform:translate(-1.8px,1px)}75%{transform:translate(1px,2.2px)}}
+@keyframes signal{0%{opacity:0}30%{opacity:.9}100%{opacity:0}}
+.nav-btn:hover,.nav-btn:focus-visible{filter:drop-shadow(0 0 8px rgba(255,107,44,.75));outline:none}
+@media (prefers-reduced-motion:reduce){.icon-fpv .quad,.icon-rc .stick,.icon-rc .signal{animation:none!important}.nav-prev:hover .icon-rc .signal{opacity:.6}}
+.nav-btn[href="#"]{opacity:.55;cursor:default}
