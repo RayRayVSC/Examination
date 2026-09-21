@@ -1158,7 +1158,7 @@
             else if (isBD()) { TOTAL = TOTAL_BD; S_TOTAL = 1; }
             else { rebuildTrail(); }
             buildSteps(); buildWaypoints(); applySubjectUI();
-            if (!keepCam) setCameraMode(SUBJECTS[sub].cam);
+            if (!keepCam) setCameraMode(SUBJECTS[sub].cam); else applyModeView();
             restart();
         }
         // ==========================================
@@ -1213,7 +1213,8 @@
             if (key === 'orbit') resetOrbitView();
             if (key === 'stand') { operatorHeight = (typeof v.height === 'number') ? v.height : 2.0; operatorPos.y = operatorHeight; }
             const cam = key === 'top' ? orthoCam : camera;
-            cam.zoom = (typeof v.zoom === 'number') ? v.zoom : (key === 'stand' ? 0.9 : 1.0); cam.updateProjectionMatrix();
+            const defZoom = key === 'stand' ? 0.9 : key === 'top' ? (isEF() ? 0.8 : 0.6) : 1.0;   // 俯視預設：B/C/D 0.6x、E/F 0.8x
+            cam.zoom = (typeof v.zoom === 'number') ? v.zoom : defZoom; cam.updateProjectionMatrix();
             if (key !== 'top') { orthoCam.zoom = 1; orthoCam.updateProjectionMatrix(); }
         }
         document.getElementById('btn-drone').addEventListener('click', () => setDroneModel(!useT110));
