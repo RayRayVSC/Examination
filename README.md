@@ -2,7 +2,7 @@
 
 民航局 AC-107 遙控無人機操作證術科測驗「無人多旋翼機 基本級」五個飛行科目的 Three.js 3D 示範動畫，單一網頁切換科目。
 
-線上觀看：https://rayrayvsc.github.io/drone-figure8-animation/
+線上觀看：https://rayrayvsc.github.io/Examination/
 
 | 科目 | 內容 |
 | --- | --- |
