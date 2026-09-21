@@ -1459,7 +1459,7 @@
             if (camKey === 'track') { camera.position.copy(trackPos); camera.lookAt(droneGroup.position); }
             else if (camKey === 'orbit') { controls.update(); }
             else if (camKey === 'stand') { camera.position.copy(operatorPos); camera.lookAt(droneGroup.position); }
-            else if (camKey === 'top') { orthoCam.up.set(0, 0, -1); orthoCam.position.set(0, 40, topCenterZ);   // 40 m：低於起霧距離（60 m），俯視畫面不受霧影響 orthoCam.lookAt(0, 0, topCenterZ); }
+            else if (camKey === 'top') { orthoCam.up.set(0, 0, -1); orthoCam.position.set(0, 40, topCenterZ); /* 40 m：低於起霧距離 60 m，俯視不受霧影響 */ orthoCam.lookAt(0, 0, topCenterZ); }
             else if (camKey === 'follow') {
                 tmpV.set(0, 3, 5).applyMatrix4(droneGroup.matrixWorld); camera.position.lerp(tmpV, 0.1); camera.lookAt(droneGroup.position);
             } else {
