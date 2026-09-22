@@ -21,16 +21,4 @@
 - 視角按鈕再點一次可鎖定（📌），切換科目時視角不變。
 - E、F 可切換頂風方向；F 可隨時按「下達緊急返航」。
 
-## 網址參數
-
-`?subject=b|c|d|e|f`、`t=秒數`、`cam=視角編號`、`avatar=giyu`、`drone=simple|t110`、`dir=right`、`emg=秒數`。
-例：`Examination.html?subject=f&t=30`
-
-場地佈置沿用 [Drone-Simulator](https://github.com/tamago797/Drone-Simulator-)（角錐圓 6 m、內圓 4 m、外圓 8 m、場地 30 × 23 m、空域 80 × 20 m）。
-
-## 模型出處
-
-- 消防員人偶：むむた式冨岡義勇 Type B v0.10，作者 むむた（mumuta）。來源 https://bowlroll.net/file/234863 ，使用條件 https://mumuta-mmd.blog.jp/archives/11033552.html 。本頁將其 PMX 轉為靜態 GLB（雙手持遙控器姿勢、羽織袖縮短），僅供非商用教學示範。
-- T110 無人機、T26SZ PRO 遙控器：依產品照片自行重建的參數化模型。
-
 版本：v0.6（2026-09-22）
