@@ -1,6 +1,6 @@
 <!DOCTYPE html>
-<!-- Examination.html v0.7 (2026-09-23) — 無人多旋翼機基本級術科動畫 B～F -->
-<html lang="zh-TW" data-version="0.7">
+<!-- Examination.html v0.8 (2026-09-24) — 無人多旋翼機基本級術科動畫 B～F -->
+<html lang="zh-TW" data-version="0.8">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -138,7 +138,8 @@
         #model-btns { display: flex; flex-direction: column; gap: 4px; width: 270px; pointer-events: auto; }
         #model-btns .line { display: flex; align-items: flex-start; gap: 6px; }
         #model-btns .lbl { font-size: 12.5px; color: #ddd; flex-shrink: 0; width: 38px; padding-top: 4px; white-space: nowrap; }
-        #avatar-btns { display: flex; flex-wrap: wrap; gap: 4px; max-width: 132px; }   /* 固定 2+2 排列，避免被中央控制列蓋住 */
+        #avatar-btns { display: flex; flex-wrap: wrap; gap: 4px; max-width: 172px; }   /* 三顆一排（義勇消防員隱藏），寬度限制避免被中央控制列蓋住 */
+        #avatar-btns button[hidden] { display: none; }
         #model-btns button { font-family: var(--font); font-size: 12px; font-weight: bold; color: #fff; background: #2A3644; border: 1px solid #4a5868; border-radius: 8px; padding: 3px 6px; cursor: pointer; white-space: nowrap; }
         #model-btns button:hover { border-color: var(--gold); }
         #model-btns button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
@@ -208,10 +209,10 @@
     <div id="model-btns">
         <div class="line"><span class="lbl">人偶</span>
             <div id="avatar-btns" title="按下時才載入模型；載入失敗時暫用簡易人偶，按任一按鈕重試">
+                <button data-avatar="worker" aria-pressed="false" aria-busy="false" title="考生：Ultimate Modular Men Pack「Worker」— Quaternius，CC0（poly.pizza/m/Yg2bQZO6Hj）">考生</button>
                 <button data-avatar="ff1" aria-pressed="false" aria-busy="false" title="消防員1：Firefighter (free download) — Jakob Scheidt，CC BY 4.0（sketchfab.com/3d-models/firefighter-free-download-042691a0afb8497798bc50174f633e68）">消防員1</button>
                 <button data-avatar="ff2" aria-pressed="false" aria-busy="false" title="消防員2：Character (Type Fire Fighter) — LokitoBlu，CC BY 4.0（sketchfab.com/3d-models/character-type-fire-fighter-f19a3cb4c994407db7205668e6901a29）">消防員2</button>
-                <button data-avatar="worker" aria-pressed="false" aria-busy="false" title="考生：Ultimate Modular Men Pack「Worker」— Quaternius，CC0（poly.pizza/m/Yg2bQZO6Hj）">考生</button>
-                <button data-avatar="giyu" aria-pressed="false" aria-busy="false" title="義勇消防員：むむた式冨岡義勇 Type B v0.10 — 作者 むむた（bowlroll.net/file/234863）">義勇消防員</button>
+                <button data-avatar="giyu" aria-pressed="false" aria-busy="false" hidden title="義勇消防員：むむた式冨岡義勇 Type B v0.10 — 作者 むむた（bowlroll.net/file/234863）">義勇消防員</button><!-- 隱藏；仍可用 ?avatar=giyu 開啟 -->
             </div>
         </div>
         <div class="line"><span class="lbl">無人機</span><button id="btn-drone" title="替換無人機模型：T110 考試用機 / 簡易模型">T110</button></div>
@@ -324,7 +325,7 @@
 
         scene.add(new THREE.AmbientLight(0xffffff, 0.6));
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        dirLight.position.set(10, 20, 10);
+        dirLight.position.set(2, 20, 2);   // 近乎正上方：無人機的真影子落在機身正下方，取代原本的假影子圓盤（v0.8）
         dirLight.castShadow = true;
         dirLight.shadow.camera.top = 45; dirLight.shadow.camera.bottom = -45;
         dirLight.shadow.camera.left = -45; dirLight.shadow.camera.right = 45;
@@ -428,7 +429,7 @@
         pad.rotation.x = -Math.PI / 2; pad.receiveShadow = true; hPadGroup.add(pad);
         const hMat = new THREE.MeshStandardMaterial({ color: 0x333333, emissive: 0x000000 });
         [[0.2, 1.0, -0.4, 0], [0.2, 1.0, 0.4, 0], [0.8, 0.2, 0, 0]].forEach(([w, h, x, z]) => {
-            const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), hMat); m.rotation.x = -Math.PI / 2; m.position.set(x, 0.01, z); hPadGroup.add(m);
+            const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), hMat); m.rotation.x = -Math.PI / 2; m.position.set(x, 0.01, z); m.receiveShadow = true; hPadGroup.add(m);
         });
         scene.add(hPadGroup);
 
@@ -448,7 +449,7 @@
             ff1:    { label: '消防員1',   file: 'models/ff1.js' },
             ff2:    { label: '消防員2',   file: 'models/ff2.js' },
             worker: { label: '考生',      file: 'models/worker.js' },
-            giyu:   { label: '義勇消防員', file: 'models/giyu.js' },
+            giyu:   { label: '義勇消防員', file: 'models/giyu.js' },   // 按鈕隱藏（hidden），僅網址參數可開啟
         };
         const avatarGroup = new THREE.Group(); avatarGroup.name = 'Avatar';
         avatarGroup.position.set(0, 0, 7); avatarGroup.rotation.y = Math.PI;   // GLB 面向 +Z，轉向場地
@@ -584,10 +585,9 @@
             const apply = () => {
                 const show = useT110 && t110Loaded;
                 t110Group.visible = show; simpleDroneParts.forEach(o => { o.visible = !show; });
-                // 機頭箭頭對齊機臂高度；機上視角移到機頭模組前緣，避免被圓頂與電池擋住；地面陰影配合機身大小
+                // 機頭箭頭對齊機臂高度；機上視角移到機頭模組前緣，避免被圓頂與電池擋住
                 noseArrow.position.y = show ? 0.155 : 0.02;
                 fpvOffset.set(0, show ? 0.10 : 0.05, show ? -0.21 : -0.15);
-                shadowCircle.scale.setScalar(show ? 1.8 : 1);
             };
             if (useT110 && !t110Loaded) loadT110(apply); else apply();
             const btn = document.getElementById('btn-drone'); if (btn) btn.innerText = useT110 ? 'T110' : '簡易';
@@ -596,10 +596,7 @@
         // 腳架貼地＝固定不動的 2 葉槳；離地＝半透明槳盤。以腳本高度判斷，拖曳時間軸或跳秒也一致
         function updateT110Rotors(onGround) { t110Rotors.forEach(r => { r.blades.visible = onGround; r.disc.visible = !onGround; }); }
 
-        // 圓形地面陰影 + 高度參考線
-        const shadowGroup = new THREE.Group();
-        const shadowCircle = new THREE.Mesh(new THREE.CircleGeometry(0.25, 32), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5 }));
-        shadowCircle.rotation.x = -Math.PI / 2; shadowGroup.add(shadowCircle); shadowGroup.position.y = 0.025; scene.add(shadowGroup);
+        // 高度參考線（地面影子改由方向光的陰影貼圖產生，不再畫假影子圓盤；圓盤與 H 字同高會 z-fighting 並壓暗 H 的發光）
         const altLineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1, 0)]);
         const altLine = new THREE.Line(altLineGeo, new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 0.15, gapSize: 0.1, transparent: true, opacity: 0.5 }));
         scene.add(altLine);
@@ -1502,7 +1499,6 @@
             tilt.pitch = THREE.MathUtils.lerp(tilt.pitch, targetPitch, 0.15); tilt.roll = THREE.MathUtils.lerp(tilt.roll, targetRoll, 0.15);
             droneTiltGroup.rotation.x = -tilt.pitch; droneTiltGroup.rotation.z = -tilt.roll;
 
-            shadowGroup.position.set(droneGroup.position.x, 0.025, droneGroup.position.z);
             altLine.position.set(droneGroup.position.x, 0.03, droneGroup.position.z); altLine.scale.y = Math.max(0.001, droneGroup.position.y - droneYOffset); altLine.computeLineDistances();
 
             // 螺旋槳
@@ -1598,7 +1594,9 @@
             setSubject(sub, !isNaN(cm));
             if (!isNaN(cm)) setCameraMode(cm);
             if (sub === 'F') { const e = parseFloat(q.get('emg')); if (!isNaN(e)) { EMG_D = distAt(Math.max(0, Math.min(T_PAT, e))); buildF(); rebuildTrail(); } }
-            { const av = q.get('avatar'); let saved = null; try { saved = localStorage.getItem('exam.avatar'); } catch (e) {} setAvatar(AVATARS[av] ? av : (AVATARS[saved] ? saved : DEFAULT_AVATAR)); }   // 網址 > 上次選擇 > 預設「考生」
+            { const av = q.get('avatar'); let saved = null; try { saved = localStorage.getItem('exam.avatar'); } catch (e) {}
+              const shown = k => { const b = document.querySelector('#avatar-btns button[data-avatar="' + k + '"]'); return !!(AVATARS[k] && b && !b.hidden); };
+              setAvatar(AVATARS[av] ? av : (shown(saved) ? saved : DEFAULT_AVATAR)); }   // 網址 > 上次選擇（僅限有顯示按鈕者）> 預設「考生」
             const t0 = parseFloat(q.get('t')); if (!isNaN(t0)) simTime = Math.max(0, Math.min(TOTAL, t0));
             const d = q.get('drone'); let savedDrone = null;
             try { savedDrone = localStorage.getItem('exam.drone'); } catch (e) {}
